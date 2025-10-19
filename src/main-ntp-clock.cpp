@@ -2,6 +2,7 @@
 #include <WiFi.h>
 #include <Preferences.h>
 #include <FastLED.h>
+#include <algorithm>
 #include "time.h"
 #include "settings.h"
 
@@ -72,7 +73,7 @@ void drawTime(struct tm *timeinfo);
 void drawDate(struct tm *timeinfo);
 void drawCompactDisplay(struct tm *timeinfo);
 void drawAnalogClock(struct tm *timeinfo);
-void drawLine(int x0, int y0, int x1, int y1, CRGB color);
+void drawAALine(float x0, float y0, float x1, float y1, CRGB color);
 uint32_t lastModeChange = 0;
 
 
@@ -199,28 +200,6 @@ void drawDate(struct tm *timeinfo) {
     drawCharacter(11, 0, 10, CRGB::Orange);
 }
 
-void drawLine(int x0, int y0, int x1, int y1, CRGB color) {
-    int dx = abs(x1 - x0);
-    int dy = -abs(y1 - y0);
-    int sx = x0 < x1 ? 1 : -1;
-    int sy = y0 < y1 ? 1 : -1;
-    int err = dx + dy;
-
-    while (true) {
-        leds[XY(x0, y0)] = color;
-        if (x0 == x1 && y0 == y1) break;
-        int e2 = 2 * err;
-        if (e2 >= dy) {
-            err += dy;
-            x0 += sx;
-        }
-        if (e2 <= dx) {
-            err += dx;
-            y0 += sy;
-        }
-    }
-}
-
 void drawAnalogClock(struct tm *timeinfo) {
     const int centerX = 7;
     const int centerY = 7;
@@ -258,14 +237,67 @@ void drawAnalogClock(struct tm *timeinfo) {
     float hour_angle = ((timeinfo->tm_hour % 12 + timeinfo->tm_min / 60.0f) / 12.0f) * 2.0f * PI;
 
     // Draw minute hand (length 7)
-    int min_end_x = centerX + 7 * sin(min_angle);
-    int min_end_y = centerY - 7 * cos(min_angle);
-    drawLine(centerX, centerY, min_end_x, min_end_y, CRGB::Blue);
+    float min_end_x = centerX + 7.5f * sin(min_angle);
+    float min_end_y = centerY - 7.5f * cos(min_angle);
+    drawAALine(centerX + 0.5f, centerY + 0.5f, min_end_x, min_end_y, CRGB::Blue);
 
     // Draw hour hand (length 5)
-    int hour_end_x = centerX + 5 * sin(hour_angle);
-    int hour_end_y = centerY - 5 * cos(hour_angle);
-    drawLine(centerX, centerY, hour_end_x, hour_end_y, CRGB::Red);
+    float hour_end_x = centerX + 5.5f * sin(hour_angle);
+    float hour_end_y = centerY - 5.5f * cos(hour_angle);
+    drawAALine(centerX + 0.5f, centerY + 0.5f, hour_end_x, hour_end_y, CRGB::Red);
+}
+
+// Helper function to draw a single anti-aliased pixel
+void drawAALinePixel(float x, float y, float brightness, CRGB color) {
+    // Clamp brightness to the valid range [0, 1]
+    brightness = max(0.0f, min(1.0f, brightness));
+    if (brightness == 0) return;
+
+    int ix = (int)x;
+    int iy = (int)y;
+
+    // Get the pixel at the given integer coordinates
+    CRGB& pixel = leds[XY(ix, iy)];
+
+    // Create a new color scaled by the brightness
+    CRGB newColor = color;
+    newColor.nscale8_video(brightness * 255);
+
+    // Blend the new color with the existing pixel color
+    pixel.r = max(pixel.r, newColor.r);
+    pixel.g = max(pixel.g, newColor.g);
+    pixel.b = max(pixel.b, newColor.b);
+}
+
+// Anti-aliased line drawing function (based on Xiaolin Wu's line algorithm)
+void drawAALine(float x0, float y0, float x1, float y1, CRGB color) {
+    bool steep = abs(y1 - y0) > abs(x1 - x0);
+    if (steep) {
+        std::swap(x0, y0);
+        std::swap(x1, y1);
+    }
+    if (x0 > x1) {
+        std::swap(x0, x1);
+        std::swap(y0, y1);
+    }
+
+    float dx = x1 - x0;
+    float dy = y1 - y0;
+    float gradient = (dx == 0) ? 1.0 : dy / dx;
+
+    float y = y0;
+    for (float x = x0; x <= x1; x++) {
+        float brightness1 = 1 - (y - floor(y));
+        float brightness2 = y - floor(y);
+        if (steep) {
+            drawAALinePixel(floor(y), x, brightness1, color);
+            drawAALinePixel(floor(y) + 1, x, brightness2, color);
+        } else {
+            drawAALinePixel(x, floor(y), brightness1, color);
+            drawAALinePixel(x, floor(y) + 1, brightness2, color);
+        }
+        y += gradient;
+    }
 }
 
 void drawCompactDisplay(struct tm *timeinfo) {
