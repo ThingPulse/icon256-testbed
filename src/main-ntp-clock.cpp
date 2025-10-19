@@ -9,7 +9,7 @@
 #define NUM_LEDS 256
 #define MATRIX_WIDTH 16
 #define MATRIX_HEIGHT 16
-#define BRIGHTNESS 50
+#define BRIGHTNESS 25
 CRGB leds[NUM_LEDS];
 
 // --- WiFi & Preferences ---
@@ -20,10 +20,16 @@ const char* ntpServer = "pool.ntp.org";
 const char* tz_Zurich = "CET-1CEST,M3.5.0,M10.5.0/3";
 
 // --- Display State ---
-enum DisplayMode { SHOW_TIME, SHOW_DATE };
+enum DisplayMode { SHOW_TIME, SHOW_DATE, SHOW_COMPACT };
 DisplayMode currentMode = SHOW_TIME;
-unsigned long lastModeChange = 0;
-const long MODE_CHANGE_INTERVAL = 10000; // Switch between time and date every 10 seconds
+
+// --- Button Handling ---
+#define BUTTON_PIN 0
+unsigned long lastButtonPress = 0;
+const long DEBOUNCE_DELAY = 200; // 200ms debounce delay
+#define MODE_CHANGE_INTERVAL 10000 // 10 seconds between mode changes
+
+
 
 // --- 5x7 Pixel Font for numbers 0-9 and a dot ---
 const byte FONT[11][5] = {
@@ -40,13 +46,33 @@ const byte FONT[11][5] = {
   {0x00, 0x00, 0x40, 0x00, 0x00}  // 10 = Dot
 };
 
+// --- 3x5 Pixel Font for numbers 0-9, colon, and dot ---
+const byte FONT_SMALL[12][3] = {
+  {0x1F, 0x11, 0x1F}, // 0
+  {0x00, 0x1F, 0x00}, // 1
+  {0x1D, 0x15, 0x17}, // 2
+  {0x15, 0x15, 0x1F}, // 3
+  {0x07, 0x04, 0x1F}, // 4
+  {0x17, 0x15, 0x1D}, // 5
+  {0x1F, 0x15, 0x1D}, // 6
+  {0x01, 0x01, 0x1F}, // 7
+  {0x1F, 0x15, 0x1F}, // 8
+  {0x17, 0x15, 0x1F}, // 9
+  {0x00, 0x0A, 0x00}, // 10 = Colon
+  {0x00, 0x08, 0x00}  // 11 = Dot
+};
+
 // --- Function Prototypes ---
 void get_wifi_credentials();
 bool connect_to_wifi();
 uint16_t XY(uint8_t x, uint8_t y);
 void drawCharacter(int x, int y, int charIndex, CRGB color);
+void drawCharacterSmall(int x_offset, int y_offset, int charIndex, CRGB color);
 void drawTime(struct tm *timeinfo);
 void drawDate(struct tm *timeinfo);
+void drawCompactDisplay(struct tm *timeinfo);
+uint32_t lastModeChange = 0;
+
 
 void setup() {
     Serial.begin(115200);
@@ -57,6 +83,9 @@ void setup() {
     FastLED.setBrightness(BRIGHTNESS);
     FastLED.clear();
     FastLED.show();
+
+    // --- Initialize Button ---
+    pinMode(BUTTON_PIN, INPUT_PULLUP);
 
     // --- Load and Connect to WiFi ---
     preferences.begin("wifi-creds", true); // Read-only
@@ -73,6 +102,18 @@ void setup() {
 }
 
 void loop() {
+    // --- Check for button press to change mode ---
+    if (digitalRead(BUTTON_PIN) == LOW && (millis() - lastButtonPress > DEBOUNCE_DELAY)) {
+        lastButtonPress = millis();
+        if (currentMode == SHOW_TIME) {
+            currentMode = SHOW_DATE;
+        } else if (currentMode == SHOW_DATE) {
+            currentMode = SHOW_COMPACT;
+        } else {
+            currentMode = SHOW_TIME;
+        }
+    }
+
     struct tm timeinfo;
     if (!getLocalTime(&timeinfo)) {
         Serial.println("Failed to obtain time");
@@ -82,16 +123,12 @@ void loop() {
 
     FastLED.clear();
 
-    // --- Switch between Time and Date display ---
-    if (millis() - lastModeChange > MODE_CHANGE_INTERVAL) {
-        lastModeChange = millis();
-        currentMode = (currentMode == SHOW_TIME) ? SHOW_DATE : SHOW_TIME;
-    }
-
     if (currentMode == SHOW_TIME) {
         drawTime(&timeinfo);
-    } else {
+    } else if (currentMode == SHOW_DATE) {
         drawDate(&timeinfo);
+    } else if (currentMode == SHOW_COMPACT) {
+        drawCompactDisplay(&timeinfo);
     }
 
     FastLED.show();
@@ -102,9 +139,6 @@ void loop() {
 
 uint16_t XY(uint8_t x, uint8_t y) {
     if (x >= MATRIX_WIDTH || y >= MATRIX_HEIGHT) return -1;
-
-    // Invert both X and Y coordinates to correct for a layout where
-    // the first pixel is at the bottom-left.
     uint8_t inverted_y = (MATRIX_HEIGHT - 1) - y;
     return inverted_y * MATRIX_WIDTH + x;
 }
@@ -114,6 +148,17 @@ void drawCharacter(int x_offset, int y_offset, int charIndex, CRGB color) {
     for (int x = 0; x < 5; x++) {
         for (int y = 0; y < 8; y++) { // Font is 7 pixels high, fits in 8
             if ((FONT[charIndex][x] >> y) & 1) {
+                leds[XY(x_offset + x, y_offset + y)] = color;
+            }
+        }
+    }
+}
+
+void drawCharacterSmall(int x_offset, int y_offset, int charIndex, CRGB color) {
+    if (charIndex < 0 || charIndex > 11) return;
+    for (int x = 0; x < 3; x++) {
+        for (int y = 0; y < 5; y++) {
+            if ((FONT_SMALL[charIndex][x] >> y) & 1) {
                 leds[XY(x_offset + x, y_offset + y)] = color;
             }
         }
@@ -141,12 +186,49 @@ void drawDate(struct tm *timeinfo) {
     drawCharacter(2, 0, day / 10, CRGB::Orange);
     drawCharacter(8, 0, day % 10, CRGB::Orange);
 
-    // Draw Dot in the middle of the bottom row
-    drawCharacter(5, 8, 10, CRGB::Red);
-
     // Draw Month (bottom row)
     drawCharacter(2, 8, month / 10, CRGB::Purple);
     drawCharacter(8, 8, month % 10, CRGB::Purple);
+
+    drawCharacter(11, 0, 10, CRGB::Orange);
+}
+
+void drawCompactDisplay(struct tm *timeinfo) {
+    int hour = timeinfo->tm_hour;
+    int min = timeinfo->tm_min;
+    int day = timeinfo->tm_mday;
+    int month = timeinfo->tm_mon + 1;
+    int year = timeinfo->tm_year % 100; // Get last two digits of the year
+    int sec = timeinfo->tm_sec;
+
+    // --- Draw Seconds Indicator (top row) ---
+    int tens = sec / 10;
+    int ones = sec % 10;
+    // First 5 LEDs for the 10s digit
+    for (int i = 0; i < tens; i++) {
+        leds[XY(i, 0)] = CRGB::DarkRed;
+    }
+    // Next 9 LEDs for the 1s digit (with a 1-pixel gap)
+    for (int i = 0; i < ones; i++) {
+        leds[XY(15  -  i, 0)] = CRGB::DarkOrange;
+    }
+
+    // Draw Time HH:MM (top row, 5px high)
+    drawCharacterSmall(1, 2, hour / 10, CRGB::Cyan);
+    drawCharacterSmall(5, 2, hour % 10, CRGB::Cyan);
+    // Make the colon blink by only drawing it on even seconds
+    if (timeinfo->tm_sec % 2 == 0) {
+        drawCharacterSmall(7, 2, 10, CRGB::White); // Colon
+    }
+    drawCharacterSmall(9, 2, min / 10, CRGB::Blue1);
+    drawCharacterSmall(13, 2, min % 10, CRGB::Blue1);
+
+    // Draw Date DD.MM.YY (bottom row, 5px high)
+    drawCharacterSmall(1, 9, day / 10, CRGB::Magenta);
+    drawCharacterSmall(5, 9, day % 10, CRGB::Magenta);
+    drawCharacterSmall(7, 10, 11, CRGB::White); // Dot (shifted down by 1 pixel)
+    drawCharacterSmall(9, 9, month / 10, CRGB::Magenta);
+    drawCharacterSmall(13, 9, month % 10, CRGB::Magenta);
 }
 
 
