@@ -20,7 +20,7 @@ const char* ntpServer = "pool.ntp.org";
 const char* tz_Zurich = "CET-1CEST,M3.5.0,M10.5.0/3";
 
 // --- Display State ---
-enum DisplayMode { SHOW_TIME, SHOW_DATE, SHOW_COMPACT };
+enum DisplayMode { SHOW_TIME, SHOW_DATE, SHOW_COMPACT, SHOW_ANALOG };
 DisplayMode currentMode = SHOW_TIME;
 
 // --- Button Handling ---
@@ -71,6 +71,8 @@ void drawCharacterSmall(int x_offset, int y_offset, int charIndex, CRGB color);
 void drawTime(struct tm *timeinfo);
 void drawDate(struct tm *timeinfo);
 void drawCompactDisplay(struct tm *timeinfo);
+void drawAnalogClock(struct tm *timeinfo);
+void drawLine(int x0, int y0, int x1, int y1, CRGB color);
 uint32_t lastModeChange = 0;
 
 
@@ -109,6 +111,8 @@ void loop() {
             currentMode = SHOW_DATE;
         } else if (currentMode == SHOW_DATE) {
             currentMode = SHOW_COMPACT;
+        } else if (currentMode == SHOW_COMPACT) {
+            currentMode = SHOW_ANALOG;
         } else {
             currentMode = SHOW_TIME;
         }
@@ -129,6 +133,8 @@ void loop() {
         drawDate(&timeinfo);
     } else if (currentMode == SHOW_COMPACT) {
         drawCompactDisplay(&timeinfo);
+    } else if (currentMode == SHOW_ANALOG) {
+        drawAnalogClock(&timeinfo);
     }
 
     FastLED.show();
@@ -191,6 +197,75 @@ void drawDate(struct tm *timeinfo) {
     drawCharacter(8, 8, month % 10, CRGB::Purple);
 
     drawCharacter(11, 0, 10, CRGB::Orange);
+}
+
+void drawLine(int x0, int y0, int x1, int y1, CRGB color) {
+    int dx = abs(x1 - x0);
+    int dy = -abs(y1 - y0);
+    int sx = x0 < x1 ? 1 : -1;
+    int sy = y0 < y1 ? 1 : -1;
+    int err = dx + dy;
+
+    while (true) {
+        leds[XY(x0, y0)] = color;
+        if (x0 == x1 && y0 == y1) break;
+        int e2 = 2 * err;
+        if (e2 >= dy) {
+            err += dy;
+            x0 += sx;
+        }
+        if (e2 <= dx) {
+            err += dx;
+            y0 += sy;
+        }
+    }
+}
+
+void drawAnalogClock(struct tm *timeinfo) {
+    const int centerX = 7;
+    const int centerY = 7;
+
+    // Draw clock face markers
+    leds[XY(centerX, 0)] = CRGB::Gray; // 12
+    leds[XY(MATRIX_WIDTH - 1, centerY)] = CRGB::Gray; // 3
+    leds[XY(centerX, MATRIX_HEIGHT - 1)] = CRGB::Gray; // 6
+    leds[XY(0, centerY)] = CRGB::Gray; // 9
+
+    // --- Draw seconds indicator on the outer perimeter ---
+    // There are 60 pixels on the perimeter of a 16x16 matrix, perfect for seconds.
+    int current_second = timeinfo->tm_sec;
+    for (int s = 0; s <= current_second; s++) {
+        int x, y;
+        if (s >= 0 && s < 16) { // Top edge
+            x = s;
+            y = 0;
+        } else if (s >= 16 && s < 31) { // Right edge
+            x = 15;
+            y = s - 15;
+        } else if (s >= 31 && s < 46) { // Bottom edge
+            x = 15 - (s - 30);
+            y = 15;
+        } else { // Left edge
+            x = 0;
+            y = 15 - (s - 45);
+        }
+        // Use a dim color for the seconds trail
+        leds[XY(x, y)] = CRGB(20, 20, 20);
+    }
+
+    // Calculate hand angles (0 is at 12 o'clock)
+    float min_angle = (timeinfo->tm_min / 60.0f) * 2.0f * PI;
+    float hour_angle = ((timeinfo->tm_hour % 12 + timeinfo->tm_min / 60.0f) / 12.0f) * 2.0f * PI;
+
+    // Draw minute hand (length 7)
+    int min_end_x = centerX + 7 * sin(min_angle);
+    int min_end_y = centerY - 7 * cos(min_angle);
+    drawLine(centerX, centerY, min_end_x, min_end_y, CRGB::Blue);
+
+    // Draw hour hand (length 5)
+    int hour_end_x = centerX + 5 * sin(hour_angle);
+    int hour_end_y = centerY - 5 * cos(hour_angle);
+    drawLine(centerX, centerY, hour_end_x, hour_end_y, CRGB::Red);
 }
 
 void drawCompactDisplay(struct tm *timeinfo) {
