@@ -18,7 +18,7 @@ const char * timezone = "CET-1CEST,M3.5.0,M10.5.0/3";
 
 // --- Timing for periodic announcement ---
 unsigned long previousMillis = 0;
-const long interval = 60000; // 1 minute in milliseconds
+const long interval = 10000; // 1 minute in milliseconds
 
 
 void get_wifi_credentials() {

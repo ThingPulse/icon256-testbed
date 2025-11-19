@@ -1,3 +1,4 @@
+
 #include <Arduino.h>
 #include <FastLED.h>
 #include "settings.h"
@@ -8,7 +9,7 @@
 #define MATRIX_HEIGHT 16
 
 // Brightness setting (0-255)
-#define BRIGHTNESS 150
+#define BRIGHTNESS 180
 
 // Define the array of leds
 CRGB leds[NUM_LEDS];
@@ -21,6 +22,9 @@ void setup() {
   // WS2812B LEDs typically use the GRB color order.
   FastLED.addLeds<WS2812B, PIN_LED, GRB>(leds, NUM_LEDS);
   FastLED.setBrightness(BRIGHTNESS);
+  //FastLED.setMaxRefreshRate(10);
+  //FastLED.setDither(DISABLE_DITHER);
+  //FastLED.setCorrection(UncorrectedColor);
 
   // Clear all LEDs at startup
   fill_solid(leds, NUM_LEDS, CRGB::Black);
@@ -36,9 +40,9 @@ void loop() {
   delay(1000);
 
   // Green
-  fill_solid(leds, NUM_LEDS, CRGB::Green);
+  fill_solid(leds, NUM_LEDS, CRGB::White);
   FastLED.show();
-  delay(1000);
+  delay(5000);
 
   // Blue
   fill_solid(leds, NUM_LEDS, CRGB::Blue);
@@ -50,7 +54,7 @@ void loop() {
   for (int i = 0; i < NUM_LEDS; i++) {
     leds[i] = CRGB::White;
     FastLED.show();
-    delay(25);
+    delay(50);
     leds[i] = CRGB::Black;
   }
   FastLED.show(); // Ensure the last pixel is turned off
