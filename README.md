@@ -6,6 +6,55 @@ This is a PlatformIO project to test the functionality of a custom 16x16 RGB LED
 *   An ICS-43434 I2S MEMS microphone.
 *   An ESP32-S3 microcontroller.
 
+## Build Environment Setup (VS Code + PlatformIO)
+
+### 1) Install prerequisites
+*   Install [Visual Studio Code](https://code.visualstudio.com/).
+*   Install the VS Code extension **PlatformIO IDE**.
+*   Ensure your board USB driver is available on your OS (for ESP32-S3 serial upload/monitor).
+
+### 2) Open this project in VS Code
+*   Clone or download this repository.
+*   In VS Code, use **File -> Open Folder...** and open the project root (the folder containing `platformio.ini`).
+*   Wait for PlatformIO to finish indexing/installing dependencies on first open.
+
+### 3) Understand `platformio.ini`
+*   This project defines multiple environments under sections like `[env:rgb-led]`, `[env:buttons]`, `[env:led-test]`.
+*   The key line is:
+
+```ini
+build_src_filter = +<*.h> +<main-${PIOENV}.cpp>
+```
+
+*   That means the active environment name selects the matching source file:
+	*   `-e rgb-led` builds `src/main-rgb-led.cpp`
+	*   `-e led-test` builds `src/main-led-test.cpp`
+	*   `-e buttons` builds `src/main-buttons.cpp`
+
+### 4) Build, upload, and monitor
+Use the integrated terminal in VS Code:
+
+```sh
+# Build one environment
+pio run -e led-test
+
+# Upload firmware
+pio run -e led-test -t upload
+
+# Open serial monitor
+pio device monitor -b 115200
+```
+
+You can replace `led-test` with any environment listed in `platformio.ini`.
+
+### 5) Typical workflow in VS Code
+1. Select which environment you want to run.
+2. Build (`pio run -e <env>`).
+3. Upload (`pio run -e <env> -t upload`).
+4. Monitor logs (`pio device monitor -b 115200`).
+
+If upload fails, check cable quality, USB port selection, and whether another serial monitor is already connected.
+
 ## Test Environments
 
 This project contains several test environments, each in a separate `src/main-<env-name>.cpp` file. You can build and upload a specific test using the PlatformIO CLI.
