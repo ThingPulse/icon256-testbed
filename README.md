@@ -53,6 +53,10 @@ You can replace `led-test` with any environment listed in `platformio.ini`.
 3. Upload (`pio run -e <env> -t upload`).
 4. Monitor logs (`pio device monitor -b 115200`).
 
+The screenshot below shows environment selection and the PlatformIO actions for build/upload and monitor in VS Code:
+
+![VS Code PlatformIO build, upload, monitor, and environment selection](assets/vscode_build.png)
+
 If upload fails, check cable quality, USB port selection, and whether another serial monitor is already connected.
 
 ## Test Environments
