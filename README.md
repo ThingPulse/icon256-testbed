@@ -21,6 +21,15 @@ pio run -e rgb-led --target upload
 *   **File**: `src/main-rgb-led.cpp`
 *   **Description**: A basic test for the 16x16 RGB LED matrix. It cycles the entire matrix through solid red, green, and blue, and then runs a single white pixel across all 256 LEDs to verify functionality and addressing.
 
+### `led-test`
+*   **File**: `src/main-led-test.cpp`
+*   **Description**: Interactive LED/button test for the 16x16 matrix.
+	*   On startup, all LEDs are set to white.
+	*   BTN1 (GPIO 11) cycles all LEDs through red, green, blue, and white, then repeats.
+	*   BTN1 also resets the single-pixel mode index to `0`.
+	*   BTN2 (GPIO 12) enables single-pixel mode: all other LEDs are turned off, one white pixel is shown, and the active pixel advances by one on each press (with wraparound).
+	*   BTN3 (GPIO 13) is currently unused in this test.
+
 ### `i2s-sound-out`
 *   **File**: `src/main-i2s-sound-out.cpp`
 *   **Description**: Tests the MAX98357A I2S amplifier and speaker by generating and playing a continuous 440Hz sine wave (A4 note).
